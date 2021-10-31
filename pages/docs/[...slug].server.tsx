@@ -9,11 +9,9 @@ import { useTranslation } from 'next-i18next'
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations'
 
 import { extractDataFromHtml, ParseHtmlResponse } from 'lib/html'
-import { cleanHtmlForDisplay } from 'lib/html/clean'
-import { highlightHtml } from 'lib/html/highlight'
 
 import Layout from 'components/layout'
-import Header from 'components/docs/header'
+import Header from 'components/docs/header.client'
 import Footer from 'components/footer'
 import Sidebar, { SidebarStructure } from 'components/sidebar'
 import DocsContainer from 'components/docs/docs-container.server'
@@ -24,7 +22,6 @@ import BackToTop from 'components/docs/back-to-top'
 import useLoading from 'hooks/loading'
 
 import { getTags, Tags, TagsResponse } from 'lib/tags'
-import { getDocsFilesFromRepo } from 'lib/github/raw'
 import Log, { logLinkColor } from 'lib/log'
 import {
   bedrockVersionsInOrder,
@@ -35,16 +32,16 @@ import {
 import { areVersionsEqual, getTagFromSlug, getVersionParts, oneLine } from 'lib/util'
 import { allFilesList } from 'lib/versions'
 import { getLocale, Locale } from 'lib/i18n'
+import fetchHtml from 'lib/html/fetch'
 
 type Props = {
-  html: string
   bedrockVersions: TransformedOutbound
   tags: TagsResponse
   parsedData: ParseHtmlResponse
   version: string[]
 }
 
-const Docs: FunctionComponent<Props> = ({ html, bedrockVersions, tags, parsedData, version }) => {
+const Docs: FunctionComponent<Props> = ({ bedrockVersions, tags, parsedData, version }) => {
   const { t } = useTranslation('common')
 
   const { isFallback, query: { slug } } = useRouter()
@@ -57,7 +54,7 @@ const Docs: FunctionComponent<Props> = ({ html, bedrockVersions, tags, parsedDat
   let loading = useLoading()
 
   // while loading, probably during fallback mode
-  if (!html || !parsedData || !bedrockVersions) {
+  if (!parsedData || !bedrockVersions) {
     if (isFallback) {
       loading = true
     } else {
@@ -117,7 +114,7 @@ const Docs: FunctionComponent<Props> = ({ html, bedrockVersions, tags, parsedDat
             <Header />
             <div className='flex'>
               <Sidebar sidebar={sidebar} file={file} loading={loading} />
-              <DocsContainer html={html} loading={loading} />
+              <DocsContainer version={version} loading={loading} />
             </div>
             <BackToTop />
             {!loading && <Footer dark darkClassName='bg-dark-gray-975' showToggles={false} outline />}
@@ -184,8 +181,6 @@ export const getStaticPaths: GetStaticPaths = async ({ locales }) => {
 export const getStaticProps: GetStaticProps = async ({ params, locale: localeVal }) => {
   const locale = getLocale(localeVal)
 
-  let html: string | null = null
-  let displayHtml: string | null = null
   let parsedData: ParseHtmlResponse | null = null
 
   if (!params) return { notFound: true }
@@ -220,16 +215,10 @@ export const getStaticProps: GetStaticProps = async ({ params, locale: localeVal
     const file = version[2]
     const path = version.join('/')
 
-    try {
-      html = await getDocsFilesFromRepo(path, locale)
-    } catch (e) {
-      Log.error(`Could not get file for "${path}"!`)
-      return { notFound: true }
-    }
+    const htmlData = await fetchHtml(version, locale)
+    if (!htmlData) return { notFound: true }
 
-    // the html to be presented on the site
-    displayHtml = cleanHtmlForDisplay(html, file, version[1])
-    displayHtml = highlightHtml(displayHtml, file)
+    const { html } = htmlData
 
     Log.info(`Processing ${logLinkColor(path)}...`)
     parsedData = extractDataFromHtml(html, file)
@@ -237,7 +226,7 @@ export const getStaticProps: GetStaticProps = async ({ params, locale: localeVal
   }
 
   return {
-    props: { html: displayHtml, bedrockVersions, tags, parsedData, version, ...await serverSideTranslations(locale, ['common']), },
+    props: { bedrockVersions, tags, parsedData, version, ...await serverSideTranslations(locale, ['common']), },
     revalidate: 60 * 60 * 12, // every 12 hours
   }
 }

@@ -1,12 +1,8 @@
-import { join } from 'path'
-
-import * as flatCache from 'flat-cache'
-import { BedrockVersionsFile } from './versions'
+import type { BedrockVersionsFile } from './versions'
 
 import Log from './log'
 
-// use tmp on production
-const cacheDirectory = process.env.NODE_ENV === 'production' ? join('/tmp', '.cache') : ''
+let cachedResponse: BedrockVersionsFile | null = null
 
 // store ratelimited call as a file and fetch when needed
 const checkCache = (): BedrockVersionsFile | undefined => {
@@ -17,28 +13,13 @@ const checkCache = (): BedrockVersionsFile | undefined => {
     if (docsContent) return docsContent
     else Log.error('Could not load docs content from cache!')
   } else {
-    const cache = flatCache.create('versions', cacheDirectory)
-    const timestamp = cache.getKey('timestamp')
-    if (!timestamp) {
-      return
-    } else {
-      const cachedTime = new Date(timestamp)
-      const currentTime = new Date()
-      // difference in mins
-      const difference = Math.round((currentTime.getTime() - cachedTime.getTime()) / 60000)
-
-      const files: BedrockVersionsFile = cache.getKey('files')
-      // update every 10 min
-      if (difference < 10 && files) return files
-    }
+    if (!!cachedResponse) return cachedResponse
   }
 }
 
 const setCache = (files: BedrockVersionsFile) => {
-  const cache = flatCache.create('versions', cacheDirectory)
-  cache.setKey('timestamp', new Date().getTime())
-  cache.setKey('files', files)
-  cache.save()
+  console.log('setting cache')
+  cachedResponse = files
 }
 
 export { setCache, checkCache }

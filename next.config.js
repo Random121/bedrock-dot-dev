@@ -8,8 +8,8 @@ const getTags = require('./scripts/lib/tags')
 
 module.exports = withBundleAnalyzer({
   experimental: {
-    concurrentFeatures: true,
-    serverComponents: true,
+    // concurrentFeatures: true,
+    // serverComponents: true,
   },
   future: {
     strictPostcssConfiguration: true
@@ -82,5 +82,11 @@ module.exports = withBundleAnalyzer({
         permanent: true,
       },
     ]
+  },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback.fs = false
+    }
+    return config
   },
 })

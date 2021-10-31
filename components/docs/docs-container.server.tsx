@@ -1,28 +1,44 @@
-import React, { FunctionComponent, memo } from 'react'
+import React, { FunctionComponent, Suspense } from 'react'
+import fetchHtml from 'lib/html/fetch'
+import { useLocale } from 'lib/i18n'
 
 type DocsContentProps = {
-  html: string
+  version: string[]
 }
 
 const docsContainerClass = 'flex-1 w-0 bg-white dark:bg-dark-gray-900'
 const docsContentClass = 'docs-content text-gray-900 dark:text-gray-200 pt-4 pr-5 pl-5 pb-5 lg:max-w-9/10 mx-auto'
 
-const DocsContent: FunctionComponent<DocsContentProps> = memo(({ html }) => {
+const contentCache: { [key: string]: string } = {}
+
+const DocsContent: FunctionComponent<DocsContentProps> = ({ version }) => {
+  const locale = useLocale()
+  const cacheKey = [locale, ...version].join('/')
+
+  if (!contentCache[cacheKey]) {
+    const promise = fetchHtml(version, locale)
+      .then((htmlData) => {
+        contentCache[cacheKey] = htmlData?.displayHtml ?? 'Failed to load.'
+        return contentCache[cacheKey]
+      })
+    throw promise
+  }
+
   return (
     <div
-      dangerouslySetInnerHTML={{ __html: html }}
+      dangerouslySetInnerHTML={{ __html: contentCache[cacheKey] }}
       className={docsContentClass}
     />
   )
-})
+}
 DocsContent.displayName = 'DocsContent'
 
 type DocsContainerProps = {
-  html: string
+  version: string[]
   loading: boolean
 }
 
-const DocsContainer: FunctionComponent<DocsContainerProps> = ({ html, loading }) => {
+const DocsContainer: FunctionComponent<DocsContainerProps> = ({ loading, version }) => {
   if (loading) {
     return (
       <div className={docsContainerClass}>
@@ -57,7 +73,9 @@ const DocsContainer: FunctionComponent<DocsContainerProps> = ({ html, loading })
 
   return (
     <div className={docsContainerClass}>
-      <DocsContent html={html} />
+      <Suspense fallback={'Loading...'}>
+        <DocsContent version={version} />
+      </Suspense>
     </div>
   )
 }
